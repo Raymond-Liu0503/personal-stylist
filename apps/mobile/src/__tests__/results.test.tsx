@@ -1,0 +1,11 @@
+import React from 'react';
+import {render,screen,fireEvent,waitFor} from '@testing-library/react-native';
+import {criterionIds} from '@stylist/contracts';
+const mockApi=jest.fn();
+const mockResult={kind:'report',receipt:'receipt',report:{schemaVersion:1,runId:'bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb',status:'complete',summary:'The layers work together.',overallScore:8,verdict:'works_well',criteria:criterionIds.map(id=>({id,applicable:id!=='intent',score:id==='intent'?null:4,observation:'Visible layers.',explanation:'They relate.'})),strengths:[],suggestions:[],limitations:[],versions:{agent:'1',skill:'1',rubric:'1',model:'mock'}}};
+jest.mock('expo-router',()=>({router:{push:jest.fn(),replace:jest.fn()}}));
+jest.mock('../services/api',()=>({api:(...args:unknown[])=>mockApi(...args)}));
+jest.mock('../state/analysis-context',()=>({useAnalysis:()=>({state:{result:mockResult},cancel:jest.fn()})}));
+jest.mock('../state/session',()=>({useSession:()=>({refresh:jest.fn()})}));
+import Results from '../../app/results';
+it('saves only after an explicit tap, includes the signed receipt, and disables repeated Save',async()=>{mockApi.mockResolvedValue({id:'saved'});render(<Results/>);expect(mockApi).not.toHaveBeenCalled();fireEvent.press(screen.getByRole('button',{name:'Save text report'}));await waitFor(()=>expect(screen.getByRole('button',{name:'Saved to history'})).toBeTruthy());expect(mockApi).toHaveBeenCalledWith('/reports',expect.anything(),{method:'POST',body:{report:mockResult.report,receipt:'receipt'}});});

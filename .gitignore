@@ -1,0 +1,13 @@
+node_modules/
+.env
+.env.*
+!.env.example
+.expo/
+dist/
+coverage/
+supabase/.temp/
+supabase/.branches/
+*.ipa
+*.mobileprovision
+evals/images/
+evals/results/

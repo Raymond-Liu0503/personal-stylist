@@ -1,0 +1,36 @@
+name: Verify
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      APP_ENV: local
+      AI_PROVIDER: mock
+      CI: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.23.2
+          cache: npm
+      - run: npm ci
+      - run: npm run skills:build
+      - run: git diff --exit-code -- supabase/functions/_shared/skills/bundle.ts
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run check:edge
+      - run: npm run test:edge
+      - run: npm run test -w @stylist/mobile
+      - run: npm run export:ios
+      - run: npx supabase start
+      - run: npm run test:db
+      - run: node scripts/test-concurrency.mjs
+      - run: npx supabase stop --no-backup
+        if: always()

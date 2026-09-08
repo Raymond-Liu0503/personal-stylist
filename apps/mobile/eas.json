@@ -1,0 +1,1 @@
+{"cli":{"version":">=16.0.0","appVersionSource":"remote"},"build":{"development":{"developmentClient":true,"distribution":"internal","environment":"development"},"preview":{"distribution":"store","autoIncrement":true,"environment":"preview"},"production":{"autoIncrement":true,"environment":"production"}},"submit":{"preview":{},"production":{}}}

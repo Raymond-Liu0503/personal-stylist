@@ -1,0 +1,14 @@
+import React,{useState} from 'react';
+import {Text} from 'react-native';
+import {router} from 'expo-router';
+import {z} from 'zod';
+import {SavedReportSchema} from '@stylist/contracts';
+import {Page,Button,ErrorText,styles} from '../src/components/ui';
+import {ReportView} from '../src/components/report';
+import {useAnalysis} from '../src/state/analysis-context';
+import {useSession} from '../src/state/session';
+import {api} from '../src/services/api';
+export default function Results(){const {state,cancel}=useAnalysis();const {refresh}=useSession();const [saved,setSaved]=useState<string|null>(null),[busy,setBusy]=useState(false),[feedback,setFeedback]=useState(false),[error,setError]=useState<string|null>(null);const result=state.result;
+ const run=async(fn:()=>Promise<void>)=>{setBusy(true);try{await fn();setError(null);}catch(e){setError(e instanceof Error?e.message:'Please try again.');}finally{setBusy(false);}};
+ return <Page title={result?.kind==='retake'?'Let’s get a clearer view.':'Your outfit, considered.'}>{result?.kind==='report'?<><ReportView report={result.report}/><Button title={saved?'Saved to history':'Save text report'} disabled={busy||!!saved} onPress={()=>void run(async()=>{const row=await api('/reports',SavedReportSchema,{method:'POST',body:{report:result.report,receipt:result.receipt}});setSaved(row.id);})}/><Text style={styles.muted}>Only this text report is saved. Unsaved reports disappear when you leave the assessment. Saving is available for 24 hours.</Text><Button title={feedback?'Thanks for your feedback':'This was helpful'} secondary disabled={busy||feedback} onPress={()=>void run(async()=>{await api('/feedback',z.object({received:z.boolean()}),{method:'POST',body:{helpful:true,issues:[],...(saved?{savedReportId:saved}:{})}});setFeedback(true);})}/><Button title="Report invented details" secondary disabled={busy||feedback} onPress={()=>void run(async()=>{await api('/feedback',z.object({received:z.boolean()}),{method:'POST',body:{helpful:false,issues:['invented_details'],...(saved?{savedReportId:saved}:{})}});setFeedback(true);})}/></>:result?.kind==='retake'?<>{result.instructions.map((s,i)=><Text key={i} style={styles.text}>{s}</Text>)}<Text style={styles.muted}>No rating was produced. This assessment counts toward the daily allowance.</Text></>:<Text style={styles.text}>There is no assessment in memory.</Text>}<ErrorText message={error}/><Button title="Start a new outfit" secondary onPress={()=>void run(async()=>{await cancel();await refresh();router.replace('/');})}/><Button title="Saved reports" secondary onPress={()=>router.push('/history')}/></Page>;
+}

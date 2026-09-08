@@ -1,0 +1,17 @@
+# Privacy and data flow
+
+Library original → app-created picker/camera copy → normalized/cropped JPEG ≤1600 px and ≤2 MiB → authenticated multipart upload → metadata-stripped request bytes → approved provider → validated text report → in-memory result. Only an explicit Save stores a text report. Neither the database nor a storage bucket receives image bytes. No application prompt/transcript table exists.
+
+The client journals app-created temporary URIs and owns `cache/stylist-private/`. Cleanup runs on cancellation, leaving photo review/camera, successful analysis, sign-out and startup. Startup also sweeps the app-exclusive native Camera/ImagePicker/ImageManipulator cache directories to cover crashes between native file creation and JS journaling. Library originals are never deleted; only paths inside the app cache can be removed. Captures are not saved to Photos. Test native folder names, HEIC orientation, metadata stripping, cleanup after force-quit and storage errors on every supported iOS build.
+
+SecureStore stores only credentials. Sessions are chunked without plaintext fallback. A crash during a chunk write can leave orphaned secure chunks; these contain credentials within the platform keychain, not photos or reports. The active manifest is changed only after successful writes. Treat keychain backup/restore and uninstall behavior as platform limitations and verify with device tests.
+
+Edge reads at most 3 MiB total and accepts one JPEG ≤2 MiB plus bounded metadata. It validates JPEG markers, dimensions and scan structure and strips APP/COM segments; it does not perform a full raster decode. A structurally valid but undecodable entropy stream may still be rejected by the provider. This avoids expensive image transforms within Edge CPU limits; malformed-input fuzzing and device-produced JPEG fixtures remain a release gate.
+
+No-store response headers apply to successes and errors. Logging accepts only request ID, operational status and elapsed time; structured run metadata holds versions and usage. Never log exceptions that might contain request/provider bodies. Never enable request-body tracing, analytics photo capture, crash attachments, session replay or image-bearing breadcrumbs in environments with real photos.
+
+Retention: profile/consent/history until deletion; operations and feedback 30 days; user-linked counters are removed on deletion, monthly budget totals remain aggregate only. Saved text reports can contain personal information volunteered in context, so treat them as personal data. Account deletion revokes Apple authorization and cascades user data, with conservative settlement first.
+
+Cancellation aborts the upload/provider fetch when possible. It cannot undo a provider request already dispatched. If billing is unknown, reservation remains until reconciliation or conservative 30-day settlement. A lost completed response cannot be recovered unless explicitly saved.
+
+Application code cannot establish provider or hosting-internal retention guarantees. Before beta, review Supabase edge execution/log settings, backups and their deletion windows, OpenRouter and chosen upstream ZDR terms, Apple policies, and crash handling. Record the exact approved provider route and review date. Inspect deployed tables, function settings and logs using synthetic identifiers and consented fixtures. Do not claim zero third-party retention without separately verified contractual support.

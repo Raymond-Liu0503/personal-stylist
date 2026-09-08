@@ -1,0 +1,37 @@
+{
+  "name": "personal-stylist",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit && npm run typecheck -w @stylist/mobile",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "skills:build": "node scripts/compile-skills.mjs",
+    "lint": "eslint .",
+    "mobile": "npm start -w @stylist/mobile",
+    "export:ios": "npm run export:ios -w @stylist/mobile",
+    "test:db": "supabase test db",
+    "check:edge": "deno check --config supabase/functions/deno.json supabase/functions/api/index.ts",
+    "test:edge": "deno test --allow-env --config supabase/functions/deno.json supabase/functions/_shared",
+    "local:user": "node scripts/local-user.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.15",
+    "deno": "2.2.15",
+    "eslint": "9.39.4",
+    "react": "19.2.3",
+    "supabase": "2.75.0",
+    "tsx": "4.21.0",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.57.0"
+  },
+  "overrides": {
+    "react": "19.2.3"
+  },
+  "type": "module"
+}

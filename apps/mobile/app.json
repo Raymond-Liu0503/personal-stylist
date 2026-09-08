@@ -1,0 +1,47 @@
+{
+  "expo": {
+    "name": "Personal Stylist",
+    "slug": "personal-stylist",
+    "scheme": "stylist",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.personalstylist.beta",
+      "usesAppleSignIn": true,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "plugins": [
+      "expo-router",
+      "expo-apple-authentication",
+      "expo-secure-store",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Use your camera to take an outfit photo for analysis.",
+          "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Choose an outfit photo to analyse.",
+          "cameraPermission": "Take an outfit photo.",
+          "microphonePermission": false
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "16.4"
+          }
+        }
+      ],
+      "expo-status-bar"
+    ]
+  }
+}
