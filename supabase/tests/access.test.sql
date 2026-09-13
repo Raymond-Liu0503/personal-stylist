@@ -1,6 +1,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(18);
+select plan(22);
+create temporary table test_budget_baseline as select coalesce((select settled_microdollars from public.budget_monthly where month=date_trunc('month',now() at time zone 'utc')::date),0)::bigint as settled;
 insert into auth.users(id,email) values ('aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa','rls-a@example.invalid'),('bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb','rls-b@example.invalid');
 insert into public.profiles(user_id) values ('aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa'),('bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb');
 insert into public.beta_access values ('aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa',true);
@@ -13,7 +14,7 @@ select is(public.dispatch_analysis('aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa','11111
 select public.settle_analysis('aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa','11111111-1111-4111-a111-111111111111',5000);
 select public.settle_analysis('aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa','11111111-1111-4111-a111-111111111111',5000);
 select is((select dispatched_count from public.usage_daily where user_id='aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa'),1,'one quota consumed');
-select is((select settled_microdollars from public.budget_monthly where month=date_trunc('month',now() at time zone 'utc')::date),5000::bigint,'settlement idempotent');
+select is((select settled_microdollars from public.budget_monthly where month=date_trunc('month',now() at time zone 'utc')::date),(select settled+5000 from test_budget_baseline),'settlement idempotent');
 select is(public.claim_analysis('aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa','11111111-1111-4111-a111-111111111111','{}'),'DUPLICATE_FINISHED','finished duplicate cannot regenerate');
 select is(public.claim_analysis('bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb','22222222-2222-4222-a222-222222222222','{}'),'BETA_REQUIRED','beta gate');
 select public.claim_analysis('aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa','22222222-2222-4222-a222-222222222222','{}');
@@ -21,6 +22,12 @@ select public.dispatch_analysis('aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa','22222222
 select public.settle_analysis('aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa','22222222-2222-4222-a222-222222222222',null,true);
 select is((select reserved_microdollars from public.budget_monthly where month=date_trunc('month',now() at time zone 'utc')::date),100000::bigint,'uncertain billing keeps reservation');
 insert into public.saved_reports(user_id,run_id,schema_version,report) values ('aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa','11111111-1111-4111-a111-111111111111',1,'{}');
+update public.analysis_runs set technique_codes=array['sleeve_adjustment'] where user_id='aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa' and request_id='11111111-1111-4111-a111-111111111111';
+insert into public.feedback(user_id,run_id,suggestion_index,technique,helpful) values ('aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa','11111111-1111-4111-a111-111111111111',0,'sleeve_adjustment',true);
+select is((select technique from public.feedback where run_id='11111111-1111-4111-a111-111111111111'),'sleeve_adjustment','unsaved-run suggestion feedback retains the server-resolved technique');
+select throws_ok($$insert into public.feedback(user_id,run_id,suggestion_index,technique,helpful) values ('aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa','11111111-1111-4111-a111-111111111111',0,'forged',false)$$,'23505',null,'duplicate suggestion feedback is rejected');
+select throws_ok($$insert into public.feedback(user_id,run_id,suggestion_index,technique,helpful) values ('aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa','11111111-1111-4111-a111-111111111111',3,'sleeve_adjustment',false)$$,'23514',null,'invalid suggestion indices are rejected');
+select throws_ok($$insert into public.feedback(user_id,run_id,suggestion_index,technique,helpful) values ('bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb','11111111-1111-4111-a111-111111111111',0,'sleeve_adjustment',false)$$,'23503',null,'suggestion feedback cannot be attached across owners');
 set local role authenticated;
 select set_config('request.jwt.claim.sub','bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb',true);
 select is((select count(*) from public.profiles),1::bigint,'only owned profile visible');

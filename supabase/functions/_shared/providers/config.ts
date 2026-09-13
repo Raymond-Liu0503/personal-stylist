@@ -2,7 +2,8 @@ import { ApiError } from '../security/errors.ts';
 import { readLimited } from '../security/input.ts';
 import { MockProvider } from './mock.ts';
 import { OpenRouterProvider } from './openrouter.ts';
-export const MODEL='google/gemini-3.1-flash-lite';
+import { productionModel } from '../agents/model-config.ts';
+export const MODEL=productionModel.id;
 export const REQUIRED_PARAMETERS=['tools','tool_choice','response_format','structured_outputs','max_tokens','reasoning','temperature'];
 type Env=(name:string)=>string|undefined;
 const disabled=()=>new ApiError('DISABLED',503,'The analysis provider configuration could not be verified.');
@@ -19,7 +20,7 @@ export function validateRoute(model:unknown,zdr:unknown,providers:string[]){
  const privacy=zdr as {data?:{tag:string;model_id:string}[]};
  if(data.data?.id!==MODEL||!data.data.architecture?.input_modalities?.includes('image')||!Array.isArray(data.data.endpoints)||!Array.isArray(privacy.data))throw disabled();
  for(const tag of providers){const endpoint=data.data.endpoints.find(e=>e.tag===tag&&e.model_id===MODEL);
-  if(!endpoint||endpoint.status!==0||endpoint.max_completion_tokens<2400||!REQUIRED_PARAMETERS.every(p=>endpoint.supported_parameters?.includes(p))||!privacy.data.some(e=>e.tag===tag&&e.model_id===MODEL))throw disabled();
+  if(!endpoint||endpoint.status!==0||endpoint.max_completion_tokens<productionModel.maxOutputTokens||!REQUIRED_PARAMETERS.every(p=>endpoint.supported_parameters?.includes(p))||!privacy.data.some(e=>e.tag===tag&&e.model_id===MODEL))throw disabled();
  }
 }
 // Cache only successful checks briefly; changed configuration always forces a fresh check.

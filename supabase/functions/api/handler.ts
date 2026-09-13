@@ -1,13 +1,14 @@
 import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
-import { POLICY_VERSION,PreferencesSchema,ConsentSchema,SaveReportSchema,FeedbackSchema,DeleteAccountSchema,type ErrorCode } from '../../../packages/contracts/src/index.ts';
+import { mergeAssessmentContext,POLICY_VERSION,PreferencesSchema,ConsentSchema,SaveReportSchema,FeedbackSchema,DeleteAccountSchema,type ErrorCode } from '../../../packages/contracts/src/index.ts';
 import { ApiError } from '../_shared/security/errors.ts';
 import { readLimited,parseAnalysis } from '../_shared/security/input.ts';
 import { signReceipt,verifyReceipt } from '../_shared/security/receipts.ts';
 import { revokeAppleGrant } from '../_shared/security/apple.ts';
 import { configuredProvider } from '../_shared/providers/config.ts';
 import { runOutfit } from '../_shared/agents/runtime.ts';
-import { outfit } from '../_shared/agents/registry.ts';
+import { assessmentVersions } from '../_shared/agents/registry.ts';
+import { recentTechniqueMemory,resolveSuggestionTechnique } from '../_shared/agents/suggestions.ts';
 export type Env=(name:string)=>string|undefined;
 const headers={'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'};
 const json=(data:unknown,status=200)=>new Response(JSON.stringify(data),{status,headers});
@@ -43,10 +44,10 @@ export function createHandler(env:Env){return async(req:Request)=>{
    const input=await parseAnalysis(req,signal);
    const prefs=PreferencesSchema.parse(checked(await userDb.from('profiles').select('preferences').eq('user_id',uid).maybeSingle())?.preferences??{});
    // Explicitly saved preferences may supply context; never invent an occasion.
-   input.metadata.context={...prefs,...input.metadata.context};
+   input.metadata.context=mergeAssessmentContext(prefs,input.metadata.context);
    const provider=await configuredProvider(env,signal,boundedFetch);
    const secret=env('REPORT_SIGNING_SECRET')??'';if(secret.length<32)throw new ApiError('DISABLED',503);
-   const claim=checked(await admin.rpc('claim_analysis',{p_user:uid,p_request:requestId,p_versions:{agent:outfit.version,skill:outfit.skillBundle.version,rubric:'2',model:provider.model},p_reserve:100000}));
+   const claim=checked(await admin.rpc('claim_analysis',{p_user:uid,p_request:requestId,p_versions:assessmentVersions(provider.model),p_reserve:100000}));
    if(claim!=='OK')throw new ApiError(claim as ErrorCode,claim==='CONSENT_REQUIRED'||claim==='BETA_REQUIRED'?403:claim.includes('DUPLICATE')||claim==='ANALYSIS_ACTIVE'?409:429,claim==='DUPLICATE_FINISHED'?'The original analysis finished. Unsaved results cannot be recovered; start a new analysis only if you want another assessment.':'This analysis cannot start. Check consent, quota, or an active submission.');
    let dispatched=false,uncertain=false,known=true,totalCost=0,inputTokens=0,outputTokens=0;
    // Accounting gets a separate bounded signal so client cancellation cannot skip settlement.
@@ -54,9 +55,15 @@ export function createHandler(env:Env){return async(req:Request)=>{
    try{
     signal.throwIfAborted();if(!checked(await admin.rpc('dispatch_analysis',{p_user:uid,p_request:requestId})))throw new ApiError('CONSENT_REQUIRED',403);dispatched=true;
     const measured={model:provider.model,generate:async(args:Parameters<typeof provider.generate>[0])=>{uncertain=true;const result=await provider.generate(args);uncertain=false;return result;}};
-    const result=await runOutfit(measured,{...input,runId:requestId,signal},usage=>{inputTokens+=usage.inputTokens;outputTokens+=usage.outputTokens;if(usage.costMicrodollars===null)known=false;else totalCost+=usage.costMicrodollars;});
-    signal.throwIfAborted();await settle(known?totalCost:null,false);status=result.kind;
-    return json(result.kind==='report'?{...result,receipt:await signReceipt(secret,uid,result.report)}:result);
+    const recentRows=checked(await admin.from('analysis_runs').select('technique_codes').eq('user_id',uid).eq('state','finished').not('technique_codes','is',null).order('updated_at',{ascending:false}).limit(3))??[];
+    const recentTechniques=recentTechniqueMemory(recentRows);
+    const result=await runOutfit(measured,{...input,runId:requestId,signal,recentTechniques},usage=>{inputTokens+=usage.inputTokens;outputTokens+=usage.outputTokens;if(usage.costMicrodollars===null)known=false;else totalCost+=usage.costMicrodollars;},diagnostic=>console.info(JSON.stringify({requestId,event:'model_validation',...diagnostic})));
+    signal.throwIfAborted();await settle(known?totalCost:null,false);
+    if(result.kind==='report')checked(await admin.from('analysis_runs').update({technique_codes:result.techniqueCodes}).eq('user_id',uid).eq('request_id',requestId).eq('state','finished'));
+    status=result.kind;
+    if(result.kind==='retake')return json(result);
+    const {techniqueCodes:_techniqueCodes,...publicResult}=result;
+    return json({...publicResult,receipt:await signReceipt(secret,uid,result.report)});
    }catch(e){await settle(!dispatched?0:!uncertain&&known?totalCost:null,true).catch(()=>{});throw e;}
   }
   if(path==='/reports'&&req.method==='POST'){
@@ -77,7 +84,17 @@ export function createHandler(env:Env){return async(req:Request)=>{
    if(req.method==='GET')return json(row);checked(await admin.from('saved_reports').delete().eq('id',id.data).eq('user_id',uid));return json({deleted:true});
   }
   if(path==='/feedback'&&req.method==='POST'){
-   const data=await body(req,FeedbackSchema,signal);if(data.savedReportId){const owned=checked(await userDb.from('saved_reports').select('id').eq('id',data.savedReportId).eq('user_id',uid).maybeSingle());if(!owned)throw new ApiError('NOT_FOUND',404);}
+   const data=await body(req,FeedbackSchema,signal);
+   if('runId' in data){
+    const run=checked(await userDb.from('analysis_runs').select('technique_codes').eq('request_id',data.runId).eq('user_id',uid).eq('state','finished').maybeSingle());
+    if(!run)throw new ApiError('NOT_FOUND',404);
+    const technique=resolveSuggestionTechnique(run.technique_codes,data.suggestionIndex);
+    if(technique===null)throw new ApiError('INVALID_INPUT',400,'That suggestion is not part of this analysis.');
+    const duplicate=checked(await userDb.from('feedback').select('id').eq('user_id',uid).eq('run_id',data.runId).eq('suggestion_index',data.suggestionIndex).maybeSingle());
+    if(duplicate)throw new ApiError('INVALID_INPUT',409,'Feedback for this suggestion was already received.');
+    checked(await admin.from('feedback').insert({user_id:uid,run_id:data.runId,suggestion_index:data.suggestionIndex,technique,helpful:data.helpful,issues:[]}));return json({received:true},201);
+   }
+   if(data.savedReportId){const owned=checked(await userDb.from('saved_reports').select('id').eq('id',data.savedReportId).eq('user_id',uid).maybeSingle());if(!owned)throw new ApiError('NOT_FOUND',404);}
    checked(await admin.from('feedback').insert({user_id:uid,saved_report_id:data.savedReportId,helpful:data.helpful,issues:data.issues}));return json({received:true},201);
   }
   if(path==='/account'&&req.method==='DELETE'){

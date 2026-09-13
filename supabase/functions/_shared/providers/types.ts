@@ -2,4 +2,5 @@ export type Message = {role:'system'|'user'|'assistant'|'tool';content:unknown;t
 export type ToolCall = {id:string;type:'function';function:{name:string;arguments:string}};
 export type Usage = {inputTokens:number;outputTokens:number;costMicrodollars:number|null};
 export type Generation = {output?:unknown;toolCalls?:ToolCall[];usage:Usage};
-export interface Provider {model:string;generate(input:{messages:Message[];image?:Uint8Array;tools:unknown[];schema:unknown;signal:AbortSignal;maxOutputTokens:number}):Promise<Generation>}
+export type ReasoningEffort='minimal'|'low'|'medium'|'high';
+export interface Provider {model:string;generate(input:{messages:Message[];image?:Uint8Array;tools:unknown[];schema:unknown;signal:AbortSignal;maxOutputTokens:number;temperature:number;reasoningEffort:ReasoningEffort}):Promise<Generation>}

@@ -11,7 +11,7 @@ export default function Camera(){
  const [visible,setVisible]=useState(false),[foreground,setForeground]=useState(AppState.currentState==='active'),[cameraAttempt,setCameraAttempt]=useState(0),[startupError,setStartupError]=useState<string|null>(null);
  const {prepare,cancel,timer,setTimer}=useAnalysis();const latest=useRef({prepare,cancel});latest.current={prepare,cancel};
  const mounted=useRef(true),focused=useRef(false),moving=useRef(false),locked=useRef(false),generation=useRef(0),timeout=useRef<ReturnType<typeof setTimeout>|null>(null),capturing=useRef(false);
- const stop=useCallback(()=>{generation.current++;if(timeout.current)clearTimeout(timeout.current);timeout.current=null;if(mounted.current){setCount(null);if(!capturing.current){locked.current=false;setBusy(false);}}void latest.current.cancel().catch(()=>{});},[]);
+ const stop=useCallback(()=>{generation.current++;if(timeout.current)clearTimeout(timeout.current);timeout.current=null;if(mounted.current){setCount(null);if(!capturing.current){locked.current=false;setBusy(false);}}void latest.current.cancel(true).catch(()=>{});},[]);
  useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;};},[]);
  useFocusEffect(useCallback(()=>{focused.current=true;setReady(false);setStartupError(null);setVisible(true);return()=>{focused.current=false;setVisible(false);setReady(false);if(!moving.current)stop();};},[stop]));
  useEffect(()=>{const subscription=AppState.addEventListener('change',state=>{setForeground(state==='active');if(state!=='active'){setReady(false);stop();}else setStartupError(null);});return()=>subscription.remove();},[stop]);
