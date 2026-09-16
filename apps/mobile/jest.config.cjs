@@ -1,1 +1,2 @@
-module.exports={preset:'jest-expo',testMatch:['**/src/__tests__/**/*.test.[jt]s?(x)'],watchman:false,transformIgnorePatterns:['node_modules/(?!((jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?/.*|expo-.*|@expo/.*|@react-navigation/.*|@stylist/contracts|react-native-svg)/)']};
+// Native UI mocks can take longer to initialize on mounted filesystems.
+module.exports={testTimeout:30000,preset:'jest-expo',testMatch:['**/src/__tests__/**/*.test.[jt]s?(x)'],watchman:false,transformIgnorePatterns:['node_modules/(?!((jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?/.*|expo-.*|@expo/.*|@react-navigation/.*|@stylist/contracts|react-native-svg)/)']};

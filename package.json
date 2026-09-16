@@ -25,13 +25,15 @@
     "deno": "2.2.15",
     "eslint": "9.39.4",
     "react": "19.2.3",
+    "react-native": "0.86.3",
     "supabase": "2.75.0",
     "tsx": "4.21.0",
     "typescript": "5.9.3",
     "typescript-eslint": "8.57.0"
   },
   "overrides": {
-    "react": "19.2.3"
+    "react": "19.2.3",
+    "react-native": "0.86.3"
   },
   "type": "module"
 }

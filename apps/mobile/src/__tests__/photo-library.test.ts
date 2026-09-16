@@ -1,0 +1,11 @@
+const mockPick = jest.fn(), mockTrack = jest.fn(async (_uri: string) => { }), mockDiscard = jest.fn(async (_uri: string) => { });
+jest.mock('expo-image-picker', () => ({ launchImageLibraryAsync: (...args: unknown[]) => mockPick(...args) }));
+jest.mock('../services/images', () => ({ trackTemporary: (uri: string) => mockTrack(uri), discardTemporary: (uri: string) => mockDiscard(uri) }));
+import { choosePhoto } from '../services/photo-library';
+const photo = { uri: 'file:///cache/photo.jpg', width: 1200, height: 1600 };
+beforeEach(() => { jest.clearAllMocks(); mockPick.mockResolvedValue({ canceled: false, assets: [photo] }); });
+it('tracks and prepares a selected image', async () => { const prepare = jest.fn().mockResolvedValue({ status: 'success', photo }); await expect(choosePhoto(prepare)).resolves.toBe(true); expect(mockTrack).toHaveBeenCalledWith(photo.uri); expect(prepare).toHaveBeenCalledWith(photo); });
+it('does nothing when the picker is cancelled', async () => { mockPick.mockResolvedValue({ canceled: true }); const prepare = jest.fn(); await expect(choosePhoto(prepare)).resolves.toBe(false); expect(mockTrack).not.toHaveBeenCalled(); expect(prepare).not.toHaveBeenCalled(); });
+it('discards a photo returned after the user leaves', async () => { const prepare = jest.fn(); await expect(choosePhoto(prepare, () => false)).resolves.toBe(false); expect(mockDiscard).toHaveBeenCalledWith(photo.uri); expect(prepare).not.toHaveBeenCalled(); });
+it('surfaces preparation errors without navigating', async () => { await expect(choosePhoto(jest.fn().mockResolvedValue({ status: 'failure', message: 'Photo is too large.' }))).rejects.toThrow('Photo is too large.'); });
+it('does not continue if focus changes while preparing', async () => { let current = true; await expect(choosePhoto(jest.fn(async () => { current = false; return { status: 'success' as const, photo }; }), () => current)).resolves.toBe(false); });

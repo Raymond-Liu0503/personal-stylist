@@ -1,0 +1,18 @@
+import React from 'react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react-native';
+const mockChoose = jest.fn(), mockPush = jest.fn(), mockCancel = jest.fn(async () => { });
+let mockSession: unknown = { user: { id: 'user-a' } };
+let mockBootstrap: unknown = { consentAccepted: true, remainingQuota: 2, betaAccess: true, features: { outfit: true } };
+jest.mock('expo-router', () => ({ router: { push: (path: string) => mockPush(path) } }));
+jest.mock('../state/session', () => ({ useSession: () => ({ session: mockSession, bootstrap: mockBootstrap, loading: false, error: null, refresh: jest.fn() }) }));
+jest.mock('../state/analysis-context', () => ({ useAnalysis: () => ({ cancel: mockCancel }) }));
+jest.mock('../services/use-photo-library', () => ({ usePhotoLibrary: () => ({ choose: mockChoose, choosing: false }) }));
+jest.mock('../services/auth', () => ({ configured: true, appleSignIn: jest.fn() }));
+jest.mock('../services/api', () => ({ api: jest.fn() }));
+jest.mock('../components/sign-in', () => ({ SignIn: () => null }));
+import Home from '../../app/(tabs)/index';
+beforeEach(() => { jest.clearAllMocks(); mockSession = { user: { id: 'user-a' } }; mockBootstrap = { consentAccepted: true, remainingQuota: 2, betaAccess: true, features: { outfit: true } }; mockChoose.mockResolvedValue(true); });
+it('centers the home screen on capture and leaves styling options for review', async () => { render(<Home />); expect(screen.queryByLabelText('Optional outfit question')).toBeNull(); expect(screen.queryByText('Styling intent')).toBeNull(); fireEvent.press(screen.getByRole('button', { name: 'Take a photo' })); await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/camera')); expect(mockCancel).toHaveBeenCalledWith(true); });
+it('opens review after library preparation succeeds', async () => { render(<Home />); fireEvent.press(screen.getByRole('button', { name: 'Choose photo' })); await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/review')); });
+it('stays on Home when library selection is cancelled', async () => { mockChoose.mockResolvedValue(false); render(<Home />); fireEvent.press(screen.getByRole('button', { name: 'Choose photo' })); await waitFor(() => expect(screen.getByRole('button', { name: 'Choose photo' })).toBeEnabled()); expect(mockPush).not.toHaveBeenCalled(); });
+it('requires consent before showing the capture action', () => { mockBootstrap = { consentAccepted: false }; render(<Home />); expect(screen.getByLabelText('I am 18 or older')).toBeTruthy(); expect(screen.queryByRole('button', { name: 'Take a photo' })).toBeNull(); });

@@ -1,1 +1,6 @@
-export const theme={colors:{background:'#FAF7F2',surface:'#FFFFFF',ink:'#252C26',muted:'#566052',accent:'#355642',line:'#D8DCCF',error:'#982F31'},space:{sm:8,md:16,lg:24,xl:32},radius:18};
+import { Platform } from 'react-native';
+export const theme = {
+    colors: { background: '#F7F3EC', surface: '#FFFDFA', ink: '#211D1E', muted: '#71686B', accent: '#742D42', line: '#DED7D0', error: '#A12D35' },
+    space: { sm: 8, md: 16, lg: 24, xl: 32 }, radius: 12,
+    fonts: { display: Platform.select({ ios: 'Georgia', android: 'serif', default: 'Georgia' }) },
+};
